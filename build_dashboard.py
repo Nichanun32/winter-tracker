@@ -1,129 +1,13 @@
-import os
-import shutil
 import json
-import urllib.request
-import ssl
-import gdown
-import pandas as pd
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor
 
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
+# โหลดข้อมูล JSON หรือแหล่งข้อมูลที่คุณใช้สร้างเว็บ
+# (ปรับแก้ชื่อไฟล์ตามที่สคริปต์เดิมของคุณใช้งานอยู่จริง)
+with open('final_github_data.json', 'r', encoding='utf-8') as f:
+    data = json.load(f)
 
-FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "")
-print(f"กำลังดาวน์โหลดไฟล์จาก Google Drive...")
-try:
-    gdown.download_folder(id=FOLDER_ID, quiet=False, use_cookies=False)
-except Exception as e:
-    print(f"คำเตือน: {e}")
+json_str = json.dumps(data, ensure_ascii=False)
 
-for root, dirs, files in os.walk('.'):
-    if '.git' in root: continue
-    for file in files:
-        if file.endswith('.xlsx'):
-            src = os.path.join(root, file)
-            dst = os.path.join('.', file)
-            if src != dst: shutil.copy(src, dst)
-
-def find_file(target_name):
-    for f in os.listdir('.'):
-        if f.lower() == target_name.lower(): return f
-    raise FileNotFoundError(f"ไม่พบไฟล์ {target_name}")
-
-file_min = find_file('min.xlsx')
-file_rain = find_file('Rain.xlsx')
-file_wind = find_file('850hPa.xlsx')
-
-df_min = pd.read_excel(file_min, header=None)
-df_rain = pd.read_excel(file_rain, header=None)
-xls_wind = pd.ExcelFile(file_wind)
-
-station_rows = list(range(2, 32)) + list(range(33, 64)) + list(range(65, 87)) + list(range(88, 104))
-df_wind_all = pd.concat([pd.read_excel(xls_wind, sheet_name=s) for s in ['N', 'NE', 'C', 'E']], ignore_index=True)
-
-days = [d for d in range(1, 32) if (d+1) < df_min.shape[1] and pd.to_numeric(df_min.iloc[station_rows, d+1], errors='coerce').notna().sum() > 10]
-
-stations = []
-for idx in station_rows:
-    st_name = str(df_min.iloc[idx, 1]).strip()
-    reg = 'N' if idx < 32 else ('NE' if idx < 64 else ('C' if idx < 87 else 'E'))
-    t_list, r_list, w_list = [], [], []
-    for d in days:
-        vt = pd.to_numeric(df_min.iloc[idx, d+1], errors='coerce')
-        t_list.append(None if pd.isna(vt) else round(float(vt), 1))
-        
-        vr = str(df_rain.iloc[idx, d+1]).strip()
-        if vr in ['nan', 'None', '']: r_free, r_raw = None, None
-        elif vr in ['-', '0']: r_free, r_raw = True, '-'
-        else: r_free, r_raw = False, vr
-        r_list.append({'is_free': r_free, 'raw': r_raw})
-        
-        if d in df_wind_all.columns:
-            vw = pd.to_numeric(df_wind_all.iloc[len(stations), d], errors='coerce')
-            w_list.append(None if pd.isna(vw) else int(vw))
-        else:
-            w_list.append(None)
-            
-    stations.append({'name': st_name, 'region': reg, 'temps': t_list, 'rains': r_list, 'winds': w_list})
-
-sounding_stations = [
-    {'stnm': '48327', 'name': 'Chiang Mai (เชียงใหม่)', 'reg': 'เหนือ'},
-    {'stnm': '48378', 'name': 'Phitsanulok (พิษณุโลก)', 'reg': 'เหนือล่าง'},
-    {'stnm': '48381', 'name': 'Khon Kaen (ขอนแก่น)', 'reg': 'อีสานบน'},
-    {'stnm': '48407', 'name': 'Ubon Ratchathani (อุบลฯ)', 'reg': 'อีสานล่าง'},
-    {'stnm': '48431', 'name': 'Nakhon Ratchasima (โคราช)', 'reg': 'อีสานล่าง'},
-    {'stnm': '48453', 'name': 'Bangna, BKK (บางนา)', 'reg': 'กลาง'},
-    {'stnm': '48480', 'name': 'Chanthaburi (จันทบุรี)', 'reg': 'ตะวันออก'},
-    {'stnm': '48500', 'name': 'Prachuap Khiri Khan (ประจวบฯ)', 'reg': 'ประจวบฯ'}
-]
-
-current_ref_day = days[-1]
-past_5_days = [current_ref_day - i for i in range(4, -1, -1) if (current_ref_day - i) > 0]
-
-def fetch_wyoming_exact(task):
-    stnm, day = task
-    url = f"https://weather.uwyo.edu/wsgi/sounding?src=FM35&datetime=2026-10-{day:02d}%2000:00:00&id={stnm}&type=TEXT:LIST"
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    d850, d200 = None, None
-    try:
-        with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
-            text = response.read().decode('utf-8', errors='ignore')
-            for line in text.splitlines():
-                if len(line) >= 49:
-                    p_str = line[0:7].strip()
-                    drct_str = line[42:49].strip()
-                    if p_str == '850.0' and drct_str != '': d850 = int(float(drct_str))
-                    elif p_str == '200.0' and drct_str != '': d200 = int(float(drct_str))
-    except Exception:
-        pass
-    return (stnm, day, d850, d200)
-
-tasks = [(st['stnm'], d) for st in sounding_stations for d in past_5_days]
-results_map = {}
-with ThreadPoolExecutor(max_workers=10) as executor:
-    for stnm, day, d850, d200 in executor.map(fetch_wyoming_exact, tasks):
-        results_map[(stnm, day)] = {'d850': d850, 'd200': d200}
-
-sounding_history = []
-for st in sounding_stations:
-    day_series = []
-    l850, l200 = None, None
-    for d in past_5_days:
-        res = results_map.get((st['stnm'], d), {'d850': None, 'd200': None})
-        d850 = res['d850'] if res['d850'] is not None else l850
-        if res['d850'] is not None: l850 = res['d850']
-        d200 = res['d200'] if res['d200'] is not None else l200
-        if res['d200'] is not None: l200 = res['d200']
-        day_series.append({'day': d, 'd850': d850, 'd200': d200})
-    sounding_history.append({'stnm': st['stnm'], 'name': st['name'], 'reg': st['reg'], 'history': day_series})
-
-combined_data = {'days': days, 'stations': stations, 'past_5_days': past_5_days, 'sounding_history': sounding_history}
-json_str = json.dumps(combined_data, ensure_ascii=False)
-
-# โค้ด HTML สมบูรณ์ที่จะถูกสร้างและเขียนทับลง index.html โดยอัตโนมัติ
-html_content = """<!DOCTYPE html>
+html_template = """<!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8">
@@ -145,7 +29,7 @@ html_content = """<!DOCTYPE html>
   <div id="root"></div>
 
   <script type="text/babel">
-    const DATA = """ + json_str + """;
+    const DATA = __DATA_PLACEHOLDER__;
     const { useState, useMemo } = React;
 
     function App() {
@@ -172,19 +56,16 @@ html_content = """<!DOCTYPE html>
           const validT = DATA.stations.map(s => s.temps[idx]).filter(t => t !== null);
           const coolCount = validT.filter(t => t <= 23.0).length;
           const pctT = validT.length > 0 ? Math.round((coolCount / validT.length * 100) * 10) / 10 : null;
-          const passT = pctT !== null ? pctT >= 60.0 : false;
-
+          
           const validW = DATA.stations.map(s => s.winds[idx]).filter(w => w !== null);
           const isPendingW = validW.length === 0;
           const passingW = validW.filter(w => isWindPassing(w)).length;
           const pctW = !isPendingW ? Math.round((passingW / validW.length * 100) * 10) / 10 : null;
-          const passW = pctW !== null ? pctW >= 60.0 : false;
 
           const validR = DATA.stations.map(s => s.rains[idx]).filter(r => r.is_free !== null);
           const isPendingR = validR.length === 0;
           const freeCount = validR.filter(r => r.is_free === true).length;
           const pctFreeR = !isPendingR ? Math.round((freeCount / validR.length * 100) * 10) / 10 : null;
-          const passR = pctFreeR !== null ? pctFreeR >= 60.0 : false;
 
           const regRain = {};
           ['N', 'NE', 'C', 'E'].forEach(reg => {
@@ -196,15 +77,11 @@ html_content = """<!DOCTYPE html>
             }
           });
 
-          const isFullyReady = (pctT !== null && pctW !== null && pctFreeR !== null);
-          const passCount = (passT ? 1 : 0) + (passW ? 1 : 0) + (passR ? 1 : 0);
-          const allPass = isFullyReady ? (passCount === 3) : false;
-
           return {
-            day, pctT, coolCount, totalT: validT.length, passT,
-            pctW, passW, isPendingW,
-            pctFreeR, passR, isPendingR, freeCount, totalR: validR.length,
-            regRain, isFullyReady, passCount, allPass
+            day, pctT, coolCount, totalT: validT.length,
+            pctW, isPendingW,
+            pctFreeR, isPendingR, freeCount, totalR: validR.length,
+            regRain
           };
         });
       }, [windMode]);
@@ -212,11 +89,18 @@ html_content = """<!DOCTYPE html>
       const statsWithStreak = useMemo(() => {
         let streak = 0;
         return dailyAnalysis.map(row => {
-          if (row.isFullyReady) {
-            if (row.allPass) streak += 1;
+          const iconPassT = row.pctT !== null && row.pctT >= 60.0;
+          const iconPassW = row.pctW !== null && row.pctW >= 60.0;
+          const iconPassR = row.pctFreeR !== null && row.pctFreeR >= 60.0;
+          const isFullyReady = (row.pctT !== null && row.pctW !== null && row.pctFreeR !== null);
+          const passCount = (iconPassT ? 1 : 0) + (iconPassW ? 1 : 0) + (iconPassR ? 1 : 0);
+          const allPass = isFullyReady ? (passCount === 3) : false;
+
+          if (isFullyReady) {
+            if (allPass) streak += 1;
             else streak = 0;
           }
-          return { ...row, streak };
+          return { ...row, iconPassT, iconPassW, iconPassR, isFullyReady, passCount, allPass, streak };
         });
       }, [dailyAnalysis]);
 
@@ -285,31 +169,31 @@ html_content = """<!DOCTYPE html>
               <div className="grid grid-cols-3 gap-2.5">
                 <div className="bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl text-center">
                   <div className="text-[11px] text-slate-400">🌡️ 1. อุณหภูมิ &le;23°C</div>
-                  <div className={`text-xl md:text-2xl font-black mt-1 ${evalDay.passT ? 'text-cyan-400' : 'text-slate-200'}`}>
+                  <div className={`text-xl md:text-2xl font-black mt-1 ${evalDay.iconPassT ? 'text-cyan-400' : 'text-slate-200'}`}>
                     {evalDay.pctT}%
                   </div>
-                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.passT ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                    {evalDay.passT ? 'ผ่านเกณฑ์ 60% ✅' : `ไม่ถึง 60% (${evalDay.coolCount}/99) ❌`}
+                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.iconPassT ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                    {evalDay.iconPassT ? 'ผ่านเกณฑ์ 60% ✅' : `ไม่ถึง 60% (${evalDay.coolCount}/99) ❌`}
                   </span>
                 </div>
 
                 <div className="bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl text-center">
                   <div className="text-[11px] text-slate-400">💨 2. ลมผิวพื้นฝ่ายเหนือ</div>
-                  <div className={`text-xl md:text-2xl font-black mt-1 ${evalDay.passW ? 'text-indigo-400' : 'text-slate-200'}`}>
+                  <div className={`text-xl md:text-2xl font-black mt-1 ${evalDay.iconPassW ? 'text-indigo-400' : 'text-slate-200'}`}>
                     {evalDay.pctW}%
                   </div>
-                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.passW ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                    {evalDay.passW ? 'ผ่านเกณฑ์ ✅' : 'ไม่ถึง 60% ❌'}
+                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.iconPassW ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                    {evalDay.iconPassW ? 'ผ่านเกณฑ์ ✅' : 'ไม่ถึง 60% ❌'}
                   </span>
                 </div>
 
                 <div className="bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl text-center">
                   <div className="text-[11px] text-slate-400">☀️ 3. ปลอดฝน (-)</div>
-                  <div className={`text-xl md:text-2xl font-black mt-1 ${evalDay.passR ? 'text-emerald-400' : 'text-slate-200'}`}>
+                  <div className={`text-xl md:text-2xl font-black mt-1 ${evalDay.iconPassR ? 'text-emerald-400' : 'text-slate-200'}`}>
                     {evalDay.pctFreeR}%
                   </div>
-                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.passR ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                    {evalDay.passR ? 'ผ่านเกณฑ์ ✅' : `ไม่ถึง 60% (${evalDay.freeCount}/99) ❌`}
+                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.iconPassR ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                    {evalDay.iconPassR ? 'ผ่านเกณฑ์ ✅' : `ไม่ถึง 60% (${evalDay.freeCount}/99) ❌`}
                   </span>
                 </div>
               </div>
@@ -325,24 +209,25 @@ html_content = """<!DOCTYPE html>
                 </div>
                 <div className="flex items-center gap-3 text-[11px]">
                   <span className="flex items-center gap-1 text-cyan-400"><span className="w-2.5 h-2.5 bg-cyan-400 rounded-full inline-block"></span> 🌡️ อุณหภูมิ &le;23°C</span>
-                  <span className="flex items-center gap-1 text-indigo-400"><span className="w-2.5 h-2.5 bg-indigo-400 rounded-full inline-block"></span> 💨 ลมฝ่ายเหนือ</span>
-                  <span className="flex items-center gap-1 text-emerald-400"><span className="w-2.5 h-2.5 bg-emerald-400 rounded-full inline-block"></span> ☀️ ปลอดฝน</span>
+                  <span className="flex items-center gap-1 text-indigo-400"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-full inline-block"></span> 💨 ลมฝ่ายเหนือ</span>
+                  <span className="flex items-center gap-1 text-emerald-400"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block"></span> ☀️ ปลอดฝน</span>
                 </div>
               </div>
 
-              <div className="w-full h-40 relative bg-slate-950 rounded-xl p-3 border border-slate-800 flex flex-col justify-between">
-                <div className="absolute left-0 right-0 top-[40%] border-b border-dashed border-amber-400/70 z-0 flex justify-end pr-2">
-                  <span className="text-[10px] text-amber-400 bg-slate-950 px-1 font-mono -mt-2.5">เกณฑ์ตัดสิน 60%</span>
-                </div>
+              {/* พิกัดเส้น 60% ถูกล็อกไว้ที่ bottom-[60%] ตรงกับสเกลแท่งกราฟจริง 100% */}
+              <div className="w-full bg-slate-950 rounded-xl p-3 border border-slate-800 space-y-2">
+                <div className="relative w-full h-32 flex items-end justify-between border-b border-slate-800">
+                  <div className="absolute left-0 right-0 bottom-[60%] border-b border-dashed border-amber-400 z-0 flex justify-end pr-2 pointer-events-none">
+                    <span className="text-[10px] text-amber-400 bg-slate-950 px-1 font-mono -mt-2">เกณฑ์ตัดสิน 60%</span>
+                  </div>
 
-                <div className="flex items-end justify-between h-28 z-10 pt-3">
-                  {dailyAnalysis.map(d => (
-                    <div key={d.day} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
+                  {statsWithStreak.map(d => (
+                    <div key={d.day} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative z-10">
                       <div className="hidden group-hover:flex absolute bottom-full mb-1 flex-col bg-slate-800 border border-slate-700 text-[10px] p-2 rounded shadow-lg z-20 pointer-events-none whitespace-nowrap">
                         <span className="font-bold text-slate-200">วันที่ {d.day} ต.ค. (ผ่าน {d.passCount}/3)</span>
-                        <span className="text-cyan-400">🌡️ อุณหภูมิ: {d.pctT !== null ? d.pctT+'%' : '-'}</span>
-                        <span className="text-indigo-400">💨 ลมฝ่ายเหนือ: {d.pctW !== null ? d.pctW+'%' : 'รอข้อมูล'}</span>
-                        <span className="text-emerald-400">☀️ ปลอดฝน: {d.pctFreeR !== null ? d.pctFreeR+'%' : 'รอข้อมูล'}</span>
+                        <span className="text-cyan-400">🌡️ อุณหภูมิ: {d.pctT !== null ? d.pctT+'%' : '-'} {d.iconPassT ? '✅' : '❌'}</span>
+                        <span className="text-indigo-400">💨 ลมฝ่ายเหนือ: {d.pctW !== null ? d.pctW+'%' : 'รอข้อมูล'} {d.iconPassW ? '✅' : '❌'}</span>
+                        <span className="text-emerald-400">☀️ ปลอดฝน: {d.pctFreeR !== null ? d.pctFreeR+'%' : 'รอข้อมูล'} {d.iconPassR ? '✅' : '❌'}</span>
                       </div>
 
                       <div className="w-full flex items-end justify-center gap-0.5 h-full">
@@ -350,6 +235,13 @@ html_content = """<!DOCTYPE html>
                         {d.pctW !== null && <div className="w-1.5 bg-indigo-500 rounded-t" style={{ height: `${d.pctW}%` }}></div>}
                         {d.pctFreeR !== null && <div className="w-1.5 bg-emerald-500 rounded-t" style={{ height: `${d.pctFreeR}%` }}></div>}
                       </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-between px-1">
+                  {statsWithStreak.map(d => (
+                    <div key={d.day} className="flex-1 text-center">
                       <span className="text-[9px] font-mono text-slate-400">{d.day}</span>
                     </div>
                   ))}
@@ -361,7 +253,7 @@ html_content = """<!DOCTYPE html>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 mb-3">
                 <div>
                   <h3 className="text-sm font-bold text-white">ไทม์ไลน์สัญลักษณ์การผ่านเกณฑ์รายวัน (1 - ปัจจุบัน)</h3>
-                  <p className="text-[11px] text-slate-400">ไอคอนที่สว่างแสดงถึงเกณฑ์ที่ผ่าน (&ge;60%) ในวันนั้น: 🌡️=อุณหภูมิ, 💨=ลม, ☀️=ปลอดฝน</p>
+                  <p className="text-[11px] text-slate-400">ไอคอนผูกกับความสูงของแท่งกราฟที่ผ่าน &ge; 60% โดยตรงอย่างไร้รอยต่อ</p>
                 </div>
                 <div className="flex items-center gap-2 text-[10px]">
                   <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ครบ 3/3</span>
@@ -372,7 +264,7 @@ html_content = """<!DOCTYPE html>
               </div>
 
               <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-15 gap-1.5">
-                {dailyAnalysis.map(d => {
+                {statsWithStreak.map(d => {
                   let cardStyle = 'bg-slate-950 border-slate-800 text-slate-500';
                   if (!d.isFullyReady) {
                     cardStyle = 'bg-slate-950/60 border-dashed border-slate-700 text-amber-400';
@@ -392,9 +284,9 @@ html_content = """<!DOCTYPE html>
                         <div className="my-1 text-[10px] text-amber-400 font-medium">รอข้อมูล</div>
                       ) : (
                         <div className="flex items-center justify-center gap-0.5 my-1 text-xs">
-                          <span className={d.passT ? 'opacity-100 scale-110' : 'opacity-20 grayscale'} title="เกณฑ์อุณหภูมิ">🌡️</span>
-                          <span className={d.passW ? 'opacity-100 scale-110' : 'opacity-20 grayscale'} title="เกณฑ์ลม">💨</span>
-                          <span className={d.passR ? 'opacity-100 scale-110' : 'opacity-20 grayscale'} title="เกณฑ์ปลอดฝน">☀️</span>
+                          <span className={d.iconPassT ? 'opacity-100 scale-110' : 'opacity-20 grayscale'} title="เกณฑ์อุณหภูมิ">🌡️</span>
+                          <span className={d.iconPassW ? 'opacity-100 scale-110' : 'opacity-20 grayscale'} title="เกณฑ์ลม">💨</span>
+                          <span className={d.iconPassR ? 'opacity-100 scale-110' : 'opacity-20 grayscale'} title="เกณฑ์ปลอดฝน">☀️</span>
                         </div>
                       )}
 
@@ -497,96 +389,123 @@ html_content = """<!DOCTYPE html>
             </div>
 
             {activeTab === 'TEMP' && (
-              <div className="overflow-x-auto max-h-[460px] border border-slate-800 rounded-xl bg-slate-950/70 text-xs scrollbar-thin">
-                <table className="w-full border-collapse">
-                  <thead className="sticky top-0 bg-slate-900 text-slate-300 border-b border-slate-800 z-10">
-                    <tr>
-                      <th className="p-2 text-left sticky left-0 bg-slate-900 border-r border-slate-800 w-44">สถานีตรวจวัด ({filteredStations.length})</th>
-                      {DATA.days.map(d => <th key={d} className="p-2 text-center w-11">{d} ต.ค.</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {filteredStations.map(st => (
-                      <tr key={st.name} className="hover:bg-slate-800/40">
-                        <td className="p-1.5 px-2 font-medium text-slate-300 sticky left-0 bg-slate-950 border-r border-slate-800 flex justify-between">
-                          <span className="truncate max-w-[130px]">{st.name}</span>
-                          <span className="text-[9px] text-slate-500">{st.region}</span>
-                        </td>
-                        {st.temps.map((temp, idx) => (
-                          <td key={idx} className="p-1 text-center">
-                            <div className={`w-8 h-6 mx-auto rounded flex items-center justify-center font-mono text-[10px] ${getTempColor(temp)}`}>
-                              {temp !== null ? temp.toFixed(1) : '-'}
-                            </div>
-                          </td>
-                        ))}
-                      </tr>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">ม่านความเย็น 99 สถานี (&le;23°C)</span>
+                  <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                    {['ALL', 'N', 'NE', 'C', 'E'].map(reg => (
+                      <button key={reg} onClick={() => setRegionFilter(reg)} className={`px-2.5 py-0.5 rounded transition ${regionFilter === reg ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'}`}>{reg}</button>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto max-h-[460px] border border-slate-800 rounded-xl bg-slate-950/70 text-xs scrollbar-thin">
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 bg-slate-900 text-slate-300 border-b border-slate-800 z-10">
+                      <tr>
+                        <th className="p-2 text-left sticky left-0 bg-slate-900 border-r border-slate-800 w-44">สถานีตรวจวัด ({filteredStations.length})</th>
+                        {DATA.days.map(d => <th key={d} className="p-2 text-center w-11">{d} ต.ค.</th>)}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {filteredStations.map(st => (
+                        <tr key={st.name} className="hover:bg-slate-800/40">
+                          <td className="p-1.5 px-2 font-medium text-slate-300 sticky left-0 bg-slate-950 border-r border-slate-800 flex justify-between">
+                            <span className="truncate max-w-[130px]">{st.name}</span>
+                            <span className="text-[9px] text-slate-500">{st.region}</span>
+                          </td>
+                          {st.temps.map((temp, idx) => (
+                            <td key={idx} className="p-1 text-center">
+                              <div className={`w-8 h-6 mx-auto rounded flex items-center justify-center font-mono text-[10px] ${getTempColor(temp)}`}>
+                                {temp !== null ? temp.toFixed(1) : '-'}
+                              </div>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
             {activeTab === 'WIND_SURF' && (
-              <div className="overflow-x-auto max-h-[460px] border border-slate-800 rounded-xl bg-slate-950/70 text-xs scrollbar-thin">
-                <table className="w-full border-collapse">
-                  <thead className="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-800 z-10">
-                    <tr>
-                      <th className="p-2 text-left sticky left-0 bg-slate-900 border-r border-slate-800 w-44">สถานี ({filteredStations.length})</th>
-                      {DATA.days.map(d => <th key={d} className="p-2 text-center w-11">{d} ต.ค.</th>)}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {filteredStations.map(st => (
-                      <tr key={st.name} className="hover:bg-slate-800/40">
-                        <td className="p-1.5 px-2 font-medium text-slate-300 sticky left-0 bg-slate-950 border-r border-slate-800 flex justify-between">
-                          <span className="truncate max-w-[130px]">{st.name}</span>
-                          <span className="text-[9px] text-slate-500">{st.region}</span>
-                        </td>
-                        {st.winds.map((deg, idx) => {
-                          const pass = isWindPassing(deg);
-                          const arrowRotation = deg !== null ? (deg + 180) % 360 : 0;
-                          return (
-                            <td key={idx} className="p-1 text-center">
-                              {deg !== null ? (
-                                <div className={`w-7 h-6 mx-auto flex items-center justify-center text-sm ${pass ? 'text-cyan-300 font-bold drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]' : 'text-slate-600'}`}>
-                                  <span style={{ display: 'inline-block', transform: `rotate(${arrowRotation}deg)` }}>↑</span>
-                                </div>
-                              ) : <span className="text-slate-700 text-[10px]">-</span>}
-                            </td>
-                          );
-                        })}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-xs text-slate-400">
+                  <span>ก้านศรลมหมุนตามทิศการเคลื่อนที่เข้าหาสถานี (deg + 180°)</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setWindMode('NE')} className={`px-2 py-0.5 rounded text-[11px] ${windMode === 'NE' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'}`}>เกณฑ์ NE (0-90°)</button>
+                    <button onClick={() => setWindMode('NORTH')} className={`px-2 py-0.5 rounded text-[11px] ${windMode === 'NORTH' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'}`}>เกณฑ์ลมฝ่ายเหนือ (270-90°)</button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto max-h-[460px] border border-slate-800 rounded-xl bg-slate-950/70 text-xs scrollbar-thin">
+                  <table className="w-full border-collapse">
+                    <thead className="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-800 z-10">
+                      <tr>
+                        <th className="p-2 text-left sticky left-0 bg-slate-900 border-r border-slate-800 w-44">สถานี ({filteredStations.length})</th>
+                        {DATA.days.map(d => <th key={d} className="p-2 text-center w-11">{d} ต.ค.</th>)}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {filteredStations.map(st => (
+                        <tr key={st.name} className="hover:bg-slate-800/40">
+                          <td className="p-1.5 px-2 font-medium text-slate-300 sticky left-0 bg-slate-950 border-r border-slate-800 flex justify-between">
+                            <span className="truncate max-w-[130px]">{st.name}</span>
+                            <span className="text-[9px] text-slate-500">{st.region}</span>
+                          </td>
+                          {st.winds.map((deg, idx) => {
+                            const pass = isWindPassing(deg);
+                            const arrowRotation = deg !== null ? (deg + 180) % 360 : 0;
+                            return (
+                              <td key={idx} className="p-1 text-center">
+                                {deg !== null ? (
+                                  <div className={`w-7 h-6 mx-auto flex items-center justify-center text-sm ${pass ? 'text-cyan-300 font-bold drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]' : 'text-slate-600'}`}>
+                                    <span style={{ display: 'inline-block', transform: `rotate(${arrowRotation}deg)` }}>↑</span>
+                                  </div>
+                                ) : <span className="text-slate-700 text-[10px]">-</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
             {activeTab === 'RAIN' && (
-              <div className="space-y-2.5">
-                {dailyAnalysis.map(d => {
-                  if (d.isPendingR) return null;
-                  return (
-                    <div key={d.day} className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs py-2 px-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                      <span className="w-12 text-slate-300 font-mono font-bold shrink-0">{d.day} ต.ค.</span>
-                      <div className="flex items-center gap-2 text-[11px] flex-1">
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">เหนือ: <b className="text-cyan-400">{d.regRain.N}%</b></span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">อีสาน: <b className="text-cyan-400">{d.regRain.NE}%</b></span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">กลาง: <b className="text-cyan-400">{d.regRain.C}%</b></span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">ตะวันออก: <b className="text-cyan-400">{d.regRain.E}%</b></span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 w-56 justify-end">
-                        <div className="w-24 h-3 bg-slate-800 rounded-full overflow-hidden flex">
-                          <div className={`h-full ${d.passR ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${d.pctFreeR}%` }} />
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-xs text-slate-400">
+                  <span>สัดส่วนสถานีปลอดฝน (-) แยก 4 ภาค</span>
+                  <span>เกณฑ์ผ่านภาพรวม &ge; 60% (คิดจาก 99 สถานี)</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {statsWithStreak.map(d => {
+                    if (d.pctFreeR === null) return null;
+                    return (
+                      <div key={d.day} className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs py-2 px-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                        <span className="w-12 text-slate-300 font-mono font-bold shrink-0">{d.day} ต.ค.</span>
+                        <div className="flex items-center gap-2 text-[11px] flex-1">
+                          <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">เหนือ: <b className="text-cyan-400">{d.regRain.N}%</b></span>
+                          <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">อีสาน: <b className="text-cyan-400">{d.regRain.NE}%</b></span>
                         </div>
-                        <span className={`font-mono font-bold w-16 text-right ${d.passR ? 'text-emerald-400' : 'text-slate-400'}`}>{d.pctFreeR}%</span>
-                        <span className="text-[10px]">{d.passR ? '✅' : '❌'}</span>
+                        <div className="flex items-center gap-2 shrink-0 w-56 justify-end">
+                          <div className="w-24 h-3 bg-slate-800 rounded-full overflow-hidden flex">
+                            <div className={`h-full ${d.iconPassR ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${d.pctFreeR}%` }} />
+                          </div>
+                          <span className={`font-mono font-bold w-16 text-right ${d.iconPassR ? 'text-emerald-400' : 'text-slate-400'}`}>{d.pctFreeR}%</span>
+                          <span className="text-[10px]">{d.iconPassR ? '✅' : '❌'}</span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
+
           </div>
 
         </div>
@@ -599,7 +518,6 @@ html_content = """<!DOCTYPE html>
 </html>
 """
 
+# บันทึกเป็นไฟล์ index.html สำหรับให้ GitHub นำไปแสดงผล
 with open('index.html', 'w', encoding='utf-8') as f:
-    f.write(html_content)
-
-print("✅ สร้างไฟล์ index.html สมบูรณ์แบบเรียบร้อยแล้ว!")
+    f.write(html_template)
