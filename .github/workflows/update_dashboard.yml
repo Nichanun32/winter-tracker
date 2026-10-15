@@ -2,20 +2,20 @@ name: Daily Winter Dashboard Update
 
 on:
   schedule:
-    # รันอัตโนมัติทุกวันเวลา 08:00 น. (เวลาไทย คือ 01:00 UTC)
     - cron: '0 1 * * *'
-  # อนุญาตให้กดสั่งรันด้วยมือ (Manual Run) ได้ตลอดเวลา
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
