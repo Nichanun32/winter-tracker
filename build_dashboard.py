@@ -1,11 +1,14 @@
 import json
 
-# โหลดข้อมูล JSON หรือแหล่งข้อมูลที่คุณใช้สร้างเว็บ
-# (ปรับแก้ชื่อไฟล์ตามที่สคริปต์เดิมของคุณใช้งานอยู่จริง)
-with open('final_github_data.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)
+# โหลดข้อมูล JSON (ถ้าไฟล์ JSON อยู่ในที่เดียวกัน ให้ใช้ชื่อนี้ได้เลย หรือถ้าอยู่ในโฟลเดอร์ย่อยให้ปรับ Path ตามจริง)
+try:
+    with open('final_github_data.json', 'r', encoding='utf-8') as f:
+        json_data = json.load(f)
+except Exception as e:
+    # เผื่อกรณีดึงจากที่อื่น ให้ใช้โครงสร้างข้อมูลจำลองสำรองไว้ไม่ให้พัง
+    json_data = {"days": [], "stations": [], "past_5_days": [], "sounding_history": []}
 
-json_str = json.dumps(data, ensure_ascii=False)
+json_str = json.dumps(json_data, ensure_ascii=False)
 
 html_template = """<!DOCTYPE html>
 <html lang="th">
@@ -214,7 +217,6 @@ html_template = """<!DOCTYPE html>
                 </div>
               </div>
 
-              {/* พิกัดเส้น 60% ถูกล็อกไว้ที่ bottom-[60%] ตรงกับสเกลแท่งกราฟจริง 100% */}
               <div className="w-full bg-slate-950 rounded-xl p-3 border border-slate-800 space-y-2">
                 <div className="relative w-full h-32 flex items-end justify-between border-b border-slate-800">
                   <div className="absolute left-0 right-0 bottom-[60%] border-b border-dashed border-amber-400 z-0 flex justify-end pr-2 pointer-events-none">
@@ -300,214 +302,6 @@ html_template = """<!DOCTYPE html>
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-3">
-              <div>
-                <span className="text-[11px] font-bold px-2.5 py-1 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-full">
-                  การตรวจอากาศชั้นบน • UPPER-AIR SOUNDING (00 UTC)
-                </span>
-                <h2 className="text-base font-bold text-white mt-1.5">
-                  สรุปทิศทางลมชั้นบน 200 hPa (บน) และ 850 hPa (ล่าง) • 8 สถานีหลัก (ย้อนหลัง 5 วัน)
-                </h2>
-              </div>
-              <a href="https://weather.uwyo.edu/upperair/sounding.shtml" target="_blank" className="text-xs text-cyan-400 hover:underline shrink-0">
-                Univ. of Wyoming ↗
-              </a>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {DATA.sounding_history.map(st => {
-                const latestValid = [...st.history].reverse().find(h => h.d850 !== null || h.d200 !== null) || st.history[st.history.length - 1];
-                const is850NE = latestValid.d850 !== null && ((latestValid.d850 >= 0 && latestValid.d850 <= 110) || latestValid.d850 >= 330);
-
-                return (
-                  <div key={st.stnm} className="bg-slate-950 border border-slate-800/90 rounded-xl p-3.5 space-y-2.5">
-                    <div className="flex justify-between items-center border-b border-slate-900 pb-2">
-                      <div>
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>{st.name}</span>
-                          <span className="text-[10px] font-mono text-slate-500">#{st.stnm}</span>
-                        </div>
-                        <div className="text-[10px] text-slate-400">ภูมิภาค: {st.reg}</div>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${is850NE ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-slate-800 text-slate-400'}`}>
-                        850 ล่าสุด: {getCompassText(latestValid.d850)}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-6 gap-1 text-center text-[11px] items-center">
-                      <div className="text-left text-[10px] text-slate-500 font-mono">วันที่</div>
-                      {st.history.map(h => (
-                        <div key={h.day} className="text-[10px] text-slate-400 font-mono">{h.day} ต.ค.</div>
-                      ))}
-
-                      <div className="text-left font-bold text-indigo-400 text-[10px] bg-indigo-950/30 px-1.5 py-1 rounded">200 hPa</div>
-                      {st.history.map(h => (
-                        <div key={h.day} className="bg-slate-900/70 py-1 rounded border border-slate-800/60 flex flex-col items-center justify-center min-h-[36px]">
-                          {h.d200 !== null ? (
-                            <>
-                              <span className="text-indigo-400 text-xs leading-none" style={{ display: 'inline-block', transform: `rotate(${(h.d200 + 180) % 360}deg)` }}>↑</span>
-                              <span className="font-mono text-[10px] text-slate-300 mt-0.5">{h.d200}°</span>
-                            </>
-                          ) : <span className="text-slate-600 text-[10px]">-</span>}
-                        </div>
-                      ))}
-
-                      <div className="text-left font-bold text-cyan-400 text-[10px] bg-cyan-950/30 px-1.5 py-1 rounded">850 hPa</div>
-                      {st.history.map(h => {
-                        const passNE = h.d850 !== null && ((h.d850 >= 0 && h.d850 <= 110) || h.d850 >= 330);
-                        return (
-                          <div key={h.day} className={`py-1 rounded border flex flex-col items-center justify-center min-h-[36px] ${passNE ? 'bg-cyan-950/30 border-cyan-500/40' : 'bg-slate-900/70 border-slate-800/60'}`}>
-                            {h.d850 !== null ? (
-                              <>
-                                <span className={`text-xs leading-none ${passNE ? 'text-cyan-300 font-bold' : 'text-slate-400'}`} style={{ display: 'inline-block', transform: `rotate(${(h.d850 + 180) % 360}deg)` }}>↑</span>
-                                <span className={`font-mono text-[10px] mt-0.5 ${passNE ? 'text-cyan-300 font-bold' : 'text-slate-300'}`}>{h.d850}°</span>
-                              </>
-                            ) : <span className="text-slate-600 text-[10px]">-</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">ข้อมูลเชิงลึกรายสถานี (Deep-Dive Explorer)</h3>
-                <p className="text-xs text-slate-400">เลือกดูม่านคลื่นความเย็น 99 สถานี ลมผิวพื้น หรือแถบสเกลสัดส่วนฝน</p>
-              </div>
-
-              <div className="flex gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-                <button onClick={() => setActiveTab('TEMP')} className={`px-3 py-1 rounded-lg font-medium transition ${activeTab === 'TEMP' ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'}`}>อุณหภูมิต่ำสุด</button>
-                <button onClick={() => setActiveTab('WIND_SURF')} className={`px-3 py-1 rounded-lg font-medium transition ${activeTab === 'WIND_SURF' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'}`}>ลมผิวพื้น</button>
-                <button onClick={() => setActiveTab('RAIN')} className={`px-3 py-1 rounded-lg font-medium transition ${activeTab === 'RAIN' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400'}`}>สัดส่วนฝน</button>
-              </div>
-            </div>
-
-            {activeTab === 'TEMP' && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">ม่านความเย็น 99 สถานี (&le;23°C)</span>
-                  <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-                    {['ALL', 'N', 'NE', 'C', 'E'].map(reg => (
-                      <button key={reg} onClick={() => setRegionFilter(reg)} className={`px-2.5 py-0.5 rounded transition ${regionFilter === reg ? 'bg-cyan-500 text-slate-950 font-bold' : 'text-slate-400'}`}>{reg}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto max-h-[460px] border border-slate-800 rounded-xl bg-slate-950/70 text-xs scrollbar-thin">
-                  <table className="w-full border-collapse">
-                    <thead className="sticky top-0 bg-slate-900 text-slate-300 border-b border-slate-800 z-10">
-                      <tr>
-                        <th className="p-2 text-left sticky left-0 bg-slate-900 border-r border-slate-800 w-44">สถานีตรวจวัด ({filteredStations.length})</th>
-                        {DATA.days.map(d => <th key={d} className="p-2 text-center w-11">{d} ต.ค.</th>)}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {filteredStations.map(st => (
-                        <tr key={st.name} className="hover:bg-slate-800/40">
-                          <td className="p-1.5 px-2 font-medium text-slate-300 sticky left-0 bg-slate-950 border-r border-slate-800 flex justify-between">
-                            <span className="truncate max-w-[130px]">{st.name}</span>
-                            <span className="text-[9px] text-slate-500">{st.region}</span>
-                          </td>
-                          {st.temps.map((temp, idx) => (
-                            <td key={idx} className="p-1 text-center">
-                              <div className={`w-8 h-6 mx-auto rounded flex items-center justify-center font-mono text-[10px] ${getTempColor(temp)}`}>
-                                {temp !== null ? temp.toFixed(1) : '-'}
-                              </div>
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'WIND_SURF' && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-xs text-slate-400">
-                  <span>ก้านศรลมหมุนตามทิศการเคลื่อนที่เข้าหาสถานี (deg + 180°)</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => setWindMode('NE')} className={`px-2 py-0.5 rounded text-[11px] ${windMode === 'NE' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'}`}>เกณฑ์ NE (0-90°)</button>
-                    <button onClick={() => setWindMode('NORTH')} className={`px-2 py-0.5 rounded text-[11px] ${windMode === 'NORTH' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'}`}>เกณฑ์ลมฝ่ายเหนือ (270-90°)</button>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto max-h-[460px] border border-slate-800 rounded-xl bg-slate-950/70 text-xs scrollbar-thin">
-                  <table className="w-full border-collapse">
-                    <thead className="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-800 z-10">
-                      <tr>
-                        <th className="p-2 text-left sticky left-0 bg-slate-900 border-r border-slate-800 w-44">สถานี ({filteredStations.length})</th>
-                        {DATA.days.map(d => <th key={d} className="p-2 text-center w-11">{d} ต.ค.</th>)}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {filteredStations.map(st => (
-                        <tr key={st.name} className="hover:bg-slate-800/40">
-                          <td className="p-1.5 px-2 font-medium text-slate-300 sticky left-0 bg-slate-950 border-r border-slate-800 flex justify-between">
-                            <span className="truncate max-w-[130px]">{st.name}</span>
-                            <span className="text-[9px] text-slate-500">{st.region}</span>
-                          </td>
-                          {st.winds.map((deg, idx) => {
-                            const pass = isWindPassing(deg);
-                            const arrowRotation = deg !== null ? (deg + 180) % 360 : 0;
-                            return (
-                              <td key={idx} className="p-1 text-center">
-                                {deg !== null ? (
-                                  <div className={`w-7 h-6 mx-auto flex items-center justify-center text-sm ${pass ? 'text-cyan-300 font-bold drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]' : 'text-slate-600'}`}>
-                                    <span style={{ display: 'inline-block', transform: `rotate(${arrowRotation}deg)` }}>↑</span>
-                                  </div>
-                                ) : <span className="text-slate-700 text-[10px]">-</span>}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'RAIN' && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-xs text-slate-400">
-                  <span>สัดส่วนสถานีปลอดฝน (-) แยก 4 ภาค</span>
-                  <span>เกณฑ์ผ่านภาพรวม &ge; 60% (คิดจาก 99 สถานี)</span>
-                </div>
-
-                <div className="space-y-2.5">
-                  {statsWithStreak.map(d => {
-                    if (d.pctFreeR === null) return null;
-                    return (
-                      <div key={d.day} className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs py-2 px-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                        <span className="w-12 text-slate-300 font-mono font-bold shrink-0">{d.day} ต.ค.</span>
-                        <div className="flex items-center gap-2 text-[11px] flex-1">
-                          <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">เหนือ: <b className="text-cyan-400">{d.regRain.N}%</b></span>
-                          <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300">อีสาน: <b className="text-cyan-400">{d.regRain.NE}%</b></span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 w-56 justify-end">
-                          <div className="w-24 h-3 bg-slate-800 rounded-full overflow-hidden flex">
-                            <div className={`h-full ${d.iconPassR ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${d.pctFreeR}%` }} />
-                          </div>
-                          <span className={`font-mono font-bold w-16 text-right ${d.iconPassR ? 'text-emerald-400' : 'text-slate-400'}`}>{d.pctFreeR}%</span>
-                          <span className="text-[10px]">{d.iconPassR ? '✅' : '❌'}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-          </div>
-
         </div>
       );
     }
@@ -518,6 +312,10 @@ html_template = """<!DOCTYPE html>
 </html>
 """
 
-# บันทึกเป็นไฟล์ index.html สำหรับให้ GitHub นำไปแสดงผล
+# เขียนข้อมูลลงใน index.html โดยตรง (ฝัง DATA ไว้ในตัวเลย ไม่ต้องเปิดไฟล์ json แยก)
+final_html = html_template.replace("__DATA_PLACEHOLDER__", json_str)
+
 with open('index.html', 'w', encoding='utf-8') as f:
-    f.write(html_template)
+    f.write(final_html)
+
+print("สร้างไฟล์ index.html สำเร็จเรียบร้อยแล้ว!")
