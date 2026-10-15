@@ -14,7 +14,10 @@ except Exception as e:
     print(f"คำเตือนในการดาวน์โหลด: {e}")
 
 # โหลดข้อมูล Excel ทั้ง 3 ไฟล์
-df_min = pd.read_excel('min.xlsx', header=None)
+import os
+
+file_path = os.path.join('Winter69', 'min.xlsx')
+df_min = pd.read_excel(file_path, header=None)
 df_rain = pd.read_excel('Rain.xlsx', header=None)
 xls_wind = pd.ExcelFile('850hPa.xlsx')
 
