@@ -1,0 +1,38 @@
+name: Daily Winter Dashboard Update
+
+on:
+  schedule:
+    # รันอัตโนมัติทุกวันเวลา 08:00 น. (เวลาไทย คือ 01:00 UTC)
+    - cron: '0 1 * * *'
+  # อนุญาตให้กดสั่งรันด้วยมือ (Manual Run) ได้ตลอดเวลา
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas openpyxl gdown numpy
+
+      - name: Fetch Data and Build HTML
+        env:
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          python build_dashboard.py
+
+      - name: Commit and Push Updated Dashboard
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Auto-update winter dashboard from Google Drive" || exit 0
+          git push
