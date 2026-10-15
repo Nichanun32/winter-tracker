@@ -1,10 +1,10 @@
 import os
+import shutil
 import json
 import gdown
 import pandas as pd
 import numpy as np
 
-# ดึงรหัสโฟลเดอร์ Google Drive
 FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "")
 
 print(f"กำลังดาวน์โหลดไฟล์จาก Google Drive (Folder ID: {FOLDER_ID})...")
@@ -13,13 +13,35 @@ try:
 except Exception as e:
     print(f"คำเตือนในการดาวน์โหลด: {e}")
 
-# โหลดข้อมูล Excel ทั้ง 3 ไฟล์
-import os
+# ย้ายไฟล์ทั้งหมดที่โหลดมาในโฟลเดอร์ย่อย (เช่น Winter69) ขึ้นมาไว้ที่โฟลเดอร์หลัก
+for root, dirs, files in os.walk('.'):
+    if '.git' in root:
+        continue
+    for file in files:
+        if file.endswith('.xlsx'):
+            src = os.path.join(root, file)
+            dst = os.path.join('.', file)
+            if src != dst:
+                print(f"ย้ายไฟล์: {src} -> {dst}")
+                shutil.copy(src, dst)
 
-file_path = os.path.join('Winter69', 'min.xlsx')
-df_min = pd.read_excel(file_path, header=None)
-df_rain = pd.read_excel('Rain.xlsx', header=None)
-xls_wind = pd.ExcelFile('850hPa.xlsx')
+print("รายชื่อไฟล์ Excel ที่พบในโฟลเดอร์ปัจจุบัน:", [f for f in os.listdir('.') if f.endswith('.xlsx')])
+
+# ฟังก์ชันช่วยค้นหาไฟล์แบบไม่สนตัวพิมพ์เล็ก-ใหญ่
+def find_file(target_name):
+    for f in os.listdir('.'):
+        if f.lower() == target_name.lower():
+            return f
+    raise FileNotFoundError(f"ไม่พบไฟล์ {target_name} ในโฟลเดอร์ กรุณาตรวจสอบว่ามีไฟล์นี้ใน Google Drive หรือไม่")
+
+file_min = find_file('min.xlsx')
+file_rain = find_file('Rain.xlsx')
+file_wind = find_file('850hPa.xlsx')
+
+# โหลดข้อมูล Excel ทั้ง 3 ไฟล์
+df_min = pd.read_excel(file_min, header=None)
+df_rain = pd.read_excel(file_rain, header=None)
+xls_wind = pd.ExcelFile(file_wind)
 
 station_rows = list(range(2, 32)) + list(range(33, 64)) + list(range(65, 87)) + list(range(88, 104))
 df_wind_all = pd.concat([pd.read_excel(xls_wind, sheet_name=s) for s in ['N', 'NE', 'C', 'E']], ignore_index=True)
@@ -51,7 +73,7 @@ for idx in station_rows:
 
 json_str = json.dumps({'days': days, 'stations': stations}, ensure_ascii=False)
 
-# เทมเพลต HTML สมบูรณ์แบบ (มีทั้ง 4 ส่วน, ปรับลูกศรลมหมุนเข้าสถานี, และแสดงผลรายภาคครบถ้วน)
+# เทมเพลต HTML สมบูรณ์
 html_content = """<!DOCTYPE html>
 <html lang="th">
 <head>
