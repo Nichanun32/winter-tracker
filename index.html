@@ -1,9 +1,4 @@
-import json
-
-with open('/content/drive/MyDrive/Winter69/final_github_data.json', 'r', encoding='utf-8') as f:
-    json_str = f.read()
-
-html_template = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8">
@@ -25,7 +20,7 @@ html_template = """<!DOCTYPE html>
   <div id="root"></div>
 
   <script type="text/babel">
-    const DATA = __DATA_PLACEHOLDER__;
+    const DATA = {"days": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "stations": [{"name": "\u0e41\u0e21\u0e48\u0e2e\u0e2d\u0e48\u0e07\u0e2a\u0e2d\u0e27", "region": "N", "temps": [23.0, 21.6, 21.0, 20.2, 19.5, 20.0, 21.0, 22.0, 22.5, 22.0, 22.5, 21.5, 22.0, 21.5, 22.0], "rains": [{"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "0.1"}, {"is_free": false, "raw": "5.2"}, {"is_free": false, "raw": "1.2"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "12.0"}, {"is_free": false, "raw": "3.5"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "0.5"}, {"is_free": false, "raw": "2.1"}, {"is_free": null, "raw": null}], "winds": [45, 90, 120, 180, 220, 140, 90, 60, 45, 120, 140, 90, 80, 70, 65]}, {"name": "\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e23\u0e32\u0e22", "region": "N", "temps": [22.5, 20.5, 19.8, 19.0, 18.5, 19.0, 20.0, 21.0, 21.5, 21.0, 21.5, 20.5, 21.0, 20.5, 21.0], "rains": [{"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "2.1"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "8.5"}, {"is_free": false, "raw": "1.0"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "0.3"}, {"is_free": null, "raw": null}], "winds": [30, 60, 90, 140, 180, 90, 60, 45, 30, 90, 110, 60, 50, 45, 40}], {"name": "\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e21\u0e34\u0e2b\u0e2d\u0e22", "region": "N", "temps": [21.0, 19.5, 18.5, 17.8, 17.0, 17.5, 18.5, 19.5, 20.0, 19.5, 20.0, 19.0, 19.5, 19.0, 19.5], "rains": [{"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "1.0"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "5.0"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "0.1"}, {"is_free": null, "raw": null}], "winds": [20, 45, 60, 110, 150, 60, 45, 30, 20, 60, 80, 45, 35, 30, 25}], {"name": "\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e21\u0e31\u0e01", "region": "N", "temps": [23.5, 22.0, 21.2, 20.5, 19.8, 20.3, 21.2, 22.2, 22.7, 22.2, 22.7, 21.7, 22.2, 21.7, 22.2], "rains": [{"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "0.5"}, {"is_free": false, "raw": "4.0"}, {"is_free": false, "raw": "0.8"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "10.0"}, {"is_free": false, "raw": "2.5"}, {"is_free": true, "raw": "-"}, {"is_free": false, "raw": "0.2"}, {"is_free": false, "raw": "1.5"}, {"is_free": null, "raw": null}], "winds": [40, 80, 110, 170, 210, 130, 80, 50, 40, 110, 130, 80, 70, 60, 55]}], "past_5_days": [11, 12, 13, 14, 15], "sounding_history": [{"stnm": "48327", "name": "Chiang Mai (\u0e40\u0e0a\u0e35\u0e22\u0e07\u0e43\u0e2b\u0e21\u0e48)", "reg": "\u0e40\u0e2b\u0e19\u0e38\u0ead", "history": [{"day": 11, "d850": 120, "d200": 220}, {"day": 12, "d850": 95, "d200": 220}, {"day": 13, "d850": 100, "d200": 165}, {"day": 14, "d850": 80, "d200": 260}, {"day": 15, "d850": 165, "d200": 275}]}, {"stnm": "48378", "name": "Phitsanulok (\u0e1e\u0e34\u0e29\u0e13\u0e38\u0e42\u0e25\u0e01)", "reg": "\u0e40\u0e2b\u0e19\u0e38\u0ead\u0e25\u0e48\u0e32\u0e07", "history": [{"day": 11, "d850": 110, "d200": 205}, {"day": 12, "d850": 115, "d200": 170}, {"day": 13, "d850": 80, "d200": 260}, {"day": 14, "d850": 80, "d200": 260}, {"day": 15, "d850": 80, "d200": 260}]}, {"stnm": "48381", "name": "Khon Kaen (\u0e02\u0e2d\u0e19\u0e01\u0e48\u0e35\u0e19)", "reg": "\u0e2d\u0e35\u0e2a\u0e32\u0e19\u0e1a\u0e19", "history": [{"day": 11, "d850": 80, "d200": 260}, {"day": 12, "d850": 40, "d200": 130}, {"day": 13, "d850": 55, "d200": 130}, {"day": 14, "d850": 80, "d200": 260}, {"day": 15, "d850": 60, "d200": 295}]}, {"stnm": "48407", "name": "Ubon Ratchathani (\u0e2d\u0e38\u0e1a\u0e25\u0e4a)", "reg": "\u0e2d\u0e35\u0e2a\u0e32\u0e19\u0e25\u0e48\u0e32\u0e07", "history": [{"day": 11, "d850": 80, "d200": 260}, {"day": 12, "d850": 80, "d200": 260}, {"day": 13, "d850": 80, "d200": 260}, {"day": 14, "d850": 85, "d200": 55}, {"day": 15, "d850": 80, "d200": 260}]}, {"stnm": "48431", "name": "Nakhon Ratchasima (\u0e42\u0e04\u0e23\u0e32\u0ee0)", "reg": "\u0e2d\u0e35\u0e2a\u0e32\u0e19\u0e25\u0e48\u0e32\u0e07", "history": [{"day": 11, "d850": 80, "d200": 260}, {"day": 12, "d850": 80, "d200": 260}, {"day": 13, "d850": 80, "d200": 260}, {"day": 14, "d850": 80, "d200": 260}, {"day": 15, "d850": 105, "d200": 50}]}, {"stnm": "48453", "name": "Bangna, BKK (\u0e1a\u0e32\u0e07\u0e19\u0e32)", "reg": "\u0e01\u0e25\u0e32\u0e07", "history": [{"day": 11, "d850": 80, "d200": 260}, {"day": 12, "d850": 90, "d200": 135}, {"day": 13, "d850": 65, "d200": 130}, {"day": 14, "d850": 80, "d200": 260}, {"day": 15, "d850": 80, "d200": 260}]}, {"stnm": "48480", "name": "Chanthaburi (\u0e08\u0e31\u0e19\u0e17\u0e1a\u0e38\u0e23\u0e35)", "reg": "\u0e15\u0e30\u0e27\u0e31\u0e19\u0e2d\u0e2d\u0e01", "history": [{"day": 11, "d850": 80, "d200": 260}, {"day": 12, "d850": 80, "d200": 260}, {"day": 13, "d850": 75, "d200": 95}, {"day": 14, "d850": 105, "d200": 80}, {"day": 15, "d850": 140, "d200": 40}]}, {"stnm": "48500", "name": "Prachuap Khiri Khan (\u0e1b\u0e23\u0e30\u0e08\u0e38\u0e1a\u0e4a)", "reg": "\u0e1b\u0e23\u0e30\u0e08\u0e38\u0e1a\u0e4a", "history": [{"day": 11, "d850": 80, "d200": 260}, {"day": 12, "d850": 80, "d200": 260}, {"day": 13, "d850": 75, "d200": 95}, {"day": 14, "d850": 115, "d200": 80}, {"day": 15, "d850": 115, "d200": 80}]}]};
     const { useState, useMemo } = React;
 
     function App() {
@@ -180,7 +175,7 @@ html_template = """<!DOCTYPE html>
                     {evalDay.pctW}%
                   </div>
                   <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.passW ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                    {evalDay.passW ? 'ผ่านเกณฑ์ 60% ✅' : 'ไม่ถึง 60% ❌'}
+                    {evalDay.passW ? 'ผ่านเกณฑ์ ✅' : 'ไม่ถึง 60% ❌'}
                   </span>
                 </div>
 
@@ -190,7 +185,7 @@ html_template = """<!DOCTYPE html>
                     {evalDay.pctFreeR}%
                   </div>
                   <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold ${evalDay.passR ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                    {evalDay.passR ? 'ผ่านเกณฑ์ 60% ✅' : `ไม่ถึง 60% (${evalDay.freeCount}/99) ❌`}
+                    {evalDay.passR ? 'ผ่านเกณฑ์ ✅' : `ไม่ถึง 60% (${evalDay.freeCount}/99) ❌`}
                   </span>
                 </div>
               </div>
@@ -567,14 +562,4 @@ html_template = """<!DOCTYPE html>
     ReactDOM.render(<App />, document.getElementById('root'));
   </script>
 </body>
-</html>"""
-
-full_html = html_template.replace("__DATA_PLACEHOLDER__", json_str)
-
-# บันทึกเป็น index.html เพื่อเตรียมนำไปวางบน GitHub Pages ได้ทันที!
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(full_html)
-
-from google.colab import files
-files.download('index.html')
-print("🎉 สร้างและดาวน์โหลดไฟล์ 'index.html' ตัวจริงเสร็จเรียบร้อย พร้อมนำไปอัปขึ้น GitHub แล้วครับ!")
+</html>
